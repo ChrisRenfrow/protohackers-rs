@@ -1,13 +1,23 @@
 use std::io;
 
+use clap::Parser;
 use tokio::{
     io::AsyncWriteExt,
     net::{TcpListener, TcpStream},
 };
 
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about=None)]
+struct ServerArgs {
+    /// The port the server should bind to.
+    #[arg(short, long, default_value_t = 4242)]
+    port: u32,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let listener = TcpListener::bind("127.0.0.1:7878").await?;
+    let args = ServerArgs::parse();
+    let listener = TcpListener::bind(format!("127.0.0.1:{}", args.port)).await?;
 
     loop {
         let (sock, _) = listener.accept().await?;
@@ -22,13 +32,20 @@ async fn echo_socket(mut socket: TcpStream) -> Result<(), Box<dyn std::error::Er
         socket.readable().await?;
 
         match socket.try_read(&mut msg) {
-            Ok(0) => return Ok(()),
+            Ok(0) => {
+                println!("Info: Read zero bytes, closing connection.");
+                return Ok(());
+            }
             Ok(n) => {
-                msg.truncate(n);
-                socket.write_all(&msg[..]).await?;
+                let received = &msg[0..n];
+                println!(
+                    "Received message: {}\nEchoing...",
+                    String::from_utf8(received.to_vec()).unwrap()
+                );
+                socket.write_all(received).await?;
             }
             Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
-                eprintln!("{}", e);
+                println!("Info: No more bytes to read");
                 continue;
             }
             Err(e) => {
