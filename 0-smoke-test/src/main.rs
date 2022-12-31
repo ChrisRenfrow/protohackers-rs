@@ -1,29 +1,34 @@
-use tokio::net::{TcpListener, TcpStream};
+use std::io;
 
-use std::{error::Error, io};
+use tokio::{
+    io::AsyncWriteExt,
+    net::{TcpListener, TcpStream},
+};
 
 #[tokio::main]
-async fn main() -> io::Result<()> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let listener = TcpListener::bind("127.0.0.1:7878").await?;
 
     loop {
-        let (socket, _) = listener.accept().await?;
-        process_socket(socket).await;
+        let (sock, _) = listener.accept().await?;
+        echo_socket(sock).await?;
     }
 }
 
-async fn process_socket(socket: TcpStream) -> Result<(), Box<dyn Error>> {
+async fn echo_socket(mut socket: TcpStream) -> Result<(), Box<dyn std::error::Error>> {
     let mut msg = vec![0; 1024];
-    
+
     loop {
         socket.readable().await?;
 
         match socket.try_read(&mut msg) {
+            Ok(0) => return Ok(()),
             Ok(n) => {
                 msg.truncate(n);
-                break;
+                socket.write_all(&msg[..]).await?;
             }
             Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+                eprintln!("{}", e);
                 continue;
             }
             Err(e) => {
@@ -31,8 +36,4 @@ async fn process_socket(socket: TcpStream) -> Result<(), Box<dyn Error>> {
             }
         }
     }
-
-    println!("Got: {}", String::from_utf8(msg).unwrap());
-    
-    Ok(())
 }
