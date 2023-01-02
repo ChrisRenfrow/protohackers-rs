@@ -1,52 +1,60 @@
-use std::io;
+use std::{error::Error, io};
 
+use chrono::prelude::*;
 use tokio::{
     io::AsyncWriteExt,
     net::{TcpListener, TcpStream},
 };
 
 pub async fn run(port: u32) -> io::Result<()> {
+    let now = Utc::now();
     let listener = TcpListener::bind(format!("127.0.0.1:{}", port)).await?;
 
     loop {
         let (sock, addr) = listener.accept().await?;
-        println!("Accepted connection: {}", addr);
-        tokio::spawn(async move { echo(sock).await });
+        println!("{}: Accepted connection: {}", now, addr);
+        tokio::spawn(async move {
+            if let Err(e) = echo(sock).await {
+                eprintln!("{e}");
+            }
+        });
     }
 }
 
-async fn echo(mut socket: TcpStream) {
+async fn echo(mut socket: TcpStream) -> Result<(), Box<dyn Error>> {
     let mut msg = vec![0; 1024];
 
     loop {
-        if let Err(e) = socket.readable().await {
-            eprintln!("{}", e);
-            return;
-        }
+        socket.readable().await?;
+
+        let now = Utc::now();
 
         match socket.try_read(&mut msg) {
             Ok(0) => {
-                println!("Info: Read zero bytes, closing connection.");
-                return;
+                println!("{}: Info: Read zero bytes, exiting...", now);
+                return Ok(());
             }
             Ok(n) => {
                 let received = &msg[0..n];
                 println!(
-                    "Received message: {}\nEchoing...",
+                    "{}: Received message: {}\nEchoing...",
+                    now,
                     String::from_utf8(received.to_vec()).unwrap()
                 );
-                if let Err(e) = socket.write_all(received).await {
-                    eprintln!("{}", e);
-                    return;
-                }
-            }
-            Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
-                println!("Info: No more bytes to read");
+                socket.write_all(received).await?;
                 continue;
             }
+            Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+                println!(
+                    "{}: Info: No more bytes to read, shutting-down connection...",
+                    now
+                );
+                socket.shutdown().await?;
+                println!("{}: Info: Bye!", Utc::now());
+                return Ok(());
+            }
             Err(e) => {
-                eprintln!("{}", e);
-                return;
+                return Err(e.into());
             }
         }
     }
