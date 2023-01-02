@@ -1,0 +1,24 @@
+# fly.toml file generated for crenfrow-protohackers on 2023-01-01T19:03:22-08:00
+
+app = "crenfrow-protohackers"
+kill_signal = "SIGINT"
+kill_timeout = 5
+processes = []
+
+[[services]]
+  internal_port = 4242
+  processes = ["app"]
+  protocol = "tcp"
+  [services.concurrency]
+    hard_limit = 25
+    soft_limit = 20
+    type = "connections"
+
+  [[services.ports]]
+    port = 4242
+
+  [[services.tcp_checks]]
+    grace_period = "1s"
+    interval = "15s"
+    restart_limit = 0
+    timeout = "2s"
