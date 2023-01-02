@@ -6,9 +6,9 @@ use tokio::{
     net::{TcpListener, TcpStream},
 };
 
-pub async fn run(port: u32) -> io::Result<()> {
+pub async fn run(port: u16) -> io::Result<()> {
     let now = Utc::now();
-    let listener = TcpListener::bind(format!("127.0.0.1:{}", port)).await?;
+    let listener = TcpListener::bind(("::", port)).await?;
 
     loop {
         let (sock, addr) = listener.accept().await?;

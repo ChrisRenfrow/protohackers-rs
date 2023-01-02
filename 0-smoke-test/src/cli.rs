@@ -5,5 +5,5 @@ use clap::Parser;
 pub struct ServerArgs {
     /// The port the server should bind to.
     #[arg(short, long, default_value_t = 4242)]
-    pub port: u32,
+    pub port: u16,
 }
