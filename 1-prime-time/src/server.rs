@@ -1,5 +1,6 @@
 use std::error::Error;
 
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use tokio::net::{TcpListener, TcpStream};
 
@@ -16,10 +17,10 @@ struct IsPrimeResponse {
 }
 
 async fn run(port: u16) -> Result<(), Box<dyn Error>> {
-    let stream = TcpStream::bind(("::", port)).await?;
+    let listener = TcpListener::bind(("::", port)).await?;
 
     loop {
-        let (sock, addr) = listener.accept().await?;
+        let (stream, addr) = listener.accept().await?;
         tokio::spawn(async move {
             if let Err(e) = handle_is_prime(stream).await {
                 eprintln!("{e}");
@@ -36,14 +37,14 @@ async fn handle_is_prime(stream: TcpStream) -> Result<(), Box<dyn Error>> {
 
         let now = Utc::now();
 
-        match socket.try_read(&mut msg) {
+        match stream.try_read(&mut msg) {
             Ok(0) => {
                 return Ok(());
             }
             Ok(n) => {
                 continue;
             }
-            Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                 return Ok(());
             }
             Err(e) => {
