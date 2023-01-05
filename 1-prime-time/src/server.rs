@@ -1,8 +1,13 @@
-use std::error::Error;
+use std::{error::Error, io};
 
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use tokio::net::{TcpListener, TcpStream};
+use tokio::{
+    io::AsyncWriteExt,
+    net::{TcpListener, TcpStream},
+};
+
+use crate::prime::is_prime;
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 struct IsPrimeRequest {
@@ -16,7 +21,16 @@ struct IsPrimeResponse {
     prime: bool,
 }
 
-async fn run(port: u16) -> Result<(), Box<dyn Error>> {
+impl IsPrimeResponse {
+    fn new(prime: bool) -> Self {
+        Self {
+            method: "isPrime".to_string(),
+            prime,
+        }
+    }
+}
+
+pub async fn run(port: u16) -> io::Result<()> {
     let listener = TcpListener::bind(("::", port)).await?;
 
     loop {
@@ -29,7 +43,7 @@ async fn run(port: u16) -> Result<(), Box<dyn Error>> {
     }
 }
 
-async fn handle_is_prime(stream: TcpStream) -> Result<(), Box<dyn Error>> {
+async fn handle_is_prime(mut stream: TcpStream) -> Result<(), Box<dyn Error>> {
     let mut msg = vec![0; 1024];
 
     loop {
@@ -42,7 +56,18 @@ async fn handle_is_prime(stream: TcpStream) -> Result<(), Box<dyn Error>> {
                 return Ok(());
             }
             Ok(n) => {
-                continue;
+                let req: IsPrimeRequest = match serde_json::from_slice(&msg[0..n]) {
+                    Ok(r) => r,
+                    Err(e) => return Err(e.into()),
+                };
+                let res = match handle_is_prime_request(req) {
+                    Ok(r) => r,
+                    Err(e) => return Err(e),
+                };
+
+                stream
+                    .write_all(serde_json::to_string(&res).unwrap().as_bytes())
+                    .await?;
             }
             Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                 return Ok(());
@@ -51,6 +76,15 @@ async fn handle_is_prime(stream: TcpStream) -> Result<(), Box<dyn Error>> {
                 return Err(e.into());
             }
         }
+    }
+}
+
+fn handle_is_prime_request(
+    req: IsPrimeRequest,
+) -> Result<IsPrimeResponse, Box<dyn std::error::Error>> {
+    match &req.method[..] {
+        "isPrime" => Ok(IsPrimeResponse::new(is_prime(req.number))),
+        m => Err(format!("unsupported method: {}", m).into()),
     }
 }
 

@@ -21,9 +21,11 @@ Extraneous fields are to be ignored.
 A conforming response object has the required field `method`, which must always contain the string `"isPrime"`, and the required field `prime`, which must contain a boolean value: `true` if the number in the request was prime, `false` if it was not.
 
 Example response:
+
 ```json
 {"method":"isPrime","prime":false}
 ```
+
 A response is _malformed_ if it is not a well-formed JSON object, if any required field is missing, if the method name is not `"isPrime"`, or if the `prime` value is not a boolean.
 
 A response object is considered _incorrect_ if it is well-formed but has an incorrect `prime` value. Note that non-integers can not be prime.
